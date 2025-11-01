@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% block content %}
+  <h2>Detection Results</h2>
+
+  <div class="result-card">
+    <div>
+      <img src="data:image/jpeg;base64,{{ image_b64 }}" alt="uploaded image">
+    </div>
+    <div class="pred-list">
+      <h3>Top predictions</h3>
+      <ul>
+        {% for p in predictions %}
+          <li>{{ loop.index }}. <strong>{{ p.CLASS_NAME }}</strong> — {{ ('%.2f'|format(p.SCORE*100)) }}% confidence</li>
+        {% endfor %}
+        {% if predictions|length == 0 %}
+          <li>No predictions returned.</li>
+        {% endif %}
+      </ul>
+    </div>
+  </div>
+
+  <div style="margin-top:16px">
+    <a href="/detect">&larr; Analyze another image</a>
+  </div>
+{% endblock %}

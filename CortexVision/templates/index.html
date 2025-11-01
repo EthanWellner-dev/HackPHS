@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>CortexVision (Flask)</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 20px; }
+      .container { max-width: 900px; margin: auto; }
+      form { border: 1px solid #ddd; padding: 16px; margin-bottom: 20px; }
+      label { display:block; margin-top:8px; }
+      input[type=text], input[type=number] { width: 100%; padding: 8px; }
+      .row { display:flex; gap:12px; }
+      .col { flex:1 }
+      .messages { margin-bottom: 12px }
+      .msg-success { color: green }
+      .msg-error { color: darkred }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>CortexVision (Flask)</h1>
+
+      <div class="messages">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            {% for category, msg in messages %}
+              <div class="msg-{{ category }}">{{ msg }}</div>
+            {% endfor %}
+          {% endif %}
+        {% endwith %}
+      </div>
+
+      <form action="/teach" method="post" id="teachForm">
+        <h2>Teach the AI — add a class to a model</h2>
+        <div class="row">
+          <div class="col">
+            <label>AI Model
+              <select name="model_name" id="modelSelect">
+                <option value="">-- select model --</option>
+                {% for m in models %}
+                  <option value="{{ m }}">{{ m }}</option>
+                {% endfor %}
+              </select>
+            </label>
+          </div>
+          <div class="col">
+            <label>Create new model
+              <input type="text" name="new_model_name" id="newModelName" placeholder="New model name">
+            </label>
+          </div>
+        </div>
+
+        <label>Class name
+          <input type="text" name="class_name" id="className" placeholder="e.g. Snow-Capped Peak" required>
+        </label>
+
+        <label>Or choose existing class for model
+          <select id="classSelect" name="class_name_select">
+            <option value="">-- select class --</option>
+          </select>
+        </label>
+
+        <label>Number of images to download
+          <input type="number" name="num_images" min="1" max="50" value="8">
+        </label>
+
+        <label>Snowflake image stage
+          <input type="text" name="stage_name" value="{{ config.get('IMAGE_STAGE', '@VISIONDB.HACKATHON_SCHEMA.IMAGE_STAGE') }}">
+        </label>
+
+        <label>Embedding model
+          <select name="embed_model">
+            {% for em in embed_models %}
+              <option value="{{ em }}">{{ em }}</option>
+            {% endfor %}
+          </select>
+        </label>
+
+        <div style="margin-top:8px"><button type="submit">Teach the AI</button></div>
+      </form>
+
+      <form action="/detect" method="post" enctype="multipart/form-data" id="detectForm">
+        <h2>Detect Objects — upload an image or use camera</h2>
+        <label>Upload image
+          <input type="file" name="image_file" id="uploadFileInput" accept="image/png,image/jpeg">
+        </label>
+        <!-- Hidden input that webcam.js will populate when capturing -->
+        <input type="file" name="image_file" id="cameraImageInput" style="display:none">
+
+        <div style="margin-top:8px">
+          <video id="webcamFeed" autoplay muted playsinline style="max-width:100%; border:1px solid #ccc; display:block; margin-bottom:8px"></video>
+          <button id="captureBtn">Capture from Camera & Upload</button>
+        </div>
+        <label>
+          <input type="checkbox" name="run_classify" value="1"> Run classification in Snowflake after upload
+        </label>
+
+        <h3>Optional: Manual bounding box</h3>
+        <div class="row">
+          <div class="col"><label>x <input type="number" name="bx" value="10" min="0"></label></div>
+          <div class="col"><label>y <input type="number" name="by" value="10" min="0"></label></div>
+          <div class="col"><label>width <input type="number" name="bw" value="100" min="0"></label></div>
+          <div class="col"><label>height <input type="number" name="bh" value="100" min="0"></label></div>
+        </div>
+
+        <div style="margin-top:8px"><button type="submit">Upload and Process</button></div>
+      </form>
+
+      <script>
+        // Populate classes when model changes
+        document.getElementById('modelSelect').addEventListener('change', async function(e){
+          const model = e.target.value;
+          const sel = document.getElementById('classSelect');
+          sel.innerHTML = '<option value="">-- select class --</option>';
+          if(!model) return;
+          try{
+            const resp = await fetch('/api/models/' + encodeURIComponent(model) + '/classes');
+            const data = await resp.json();
+            if(data && data.classes){
+              for(const c of data.classes){
+                const o = document.createElement('option'); o.value = c; o.text = c; sel.appendChild(o);
+              }
+            }
+          }catch(err){ console.warn(err); }
+        });
+
+        // if user chooses existing class from dropdown, copy into class_name text input on change
+        document.getElementById('classSelect').addEventListener('change', function(e){
+          if(e.target.value){ document.getElementById('className').value = e.target.value; }
+        });
+      </script>
+
+      <script src="/static/webcam.js"></script>
+
+      <p>Note: This Flask UI is a minimal replacement for the previous Streamlit UI. Classification output is returned as a file response for the image (with bounding box drawn if requested). Flash messages show status from teach workflow and classification errors.</p>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% block content %}
+  <h2>Detect Objects — upload an image or use camera</h2>
+
+  <form action="/detect" method="post" enctype="multipart/form-data" id="detectForm">
+    <label>Upload image
+      <input type="file" name="image_file" id="uploadFileInput" accept="image/png,image/jpeg">
+    </label>
+
+    <input type="hidden" name="image_data" id="imageDataInput">
+
+    <div style="margin-top:8px">
+      <video id="webcamFeed" autoplay muted playsinline style="max-width:100%; border:1px solid #ccc; display:none; margin-bottom:8px"></video>
+      <div>
+        <button id="useCameraBtn" type="button" class="secondary">Use Camera</button>
+        <button id="captureBtn" type="button">Capture from Camera & Upload</button>
+      </div>
+    </div>
+
+    <div style="margin-top:8px"><button type="submit">Upload and Process</button></div>
+  </form>
+
+  <p class="center">Note: Camera will only start when you click "Use Camera". Predictions will be displayed on a separate results page.</p>
+
+  <script src="/static/webcam.js"></script>
+{% endblock %}

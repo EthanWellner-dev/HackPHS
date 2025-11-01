@@ -1,0 +1,31 @@
+/* Mountain paper theme: warm oranges/reds/yellows and subtle paper texture */
+:root{
+  --bg1: #fff5eb;
+  --bg2: #ffe8d6;
+  --accent1: #ff6f3c;
+  --accent2: #ffb03b;
+  --muted: #6b5e57;
+}
+html,body{height:100%;margin:0;font-family:Inter, Arial, sans-serif;background:linear-gradient(180deg,var(--bg1),var(--bg2));}
+/* subtle paper texture */
+body::before{content:"";position:fixed;inset:0;pointer-events:none;background-image:linear-gradient(rgba(255,255,255,0.04), rgba(0,0,0,0.02));mix-blend-mode:overlay}
+.site-header{background:linear-gradient(90deg, rgba(255,111,60,0.95), rgba(255,176,59,0.95));color:white;padding:18px 20px;box-shadow:0 4px 12px rgba(0,0,0,0.08)}
+.header-inner{max-width:900px;margin:0 auto;display:flex;align-items:center;justify-content:space-between}
+.site-title{margin:0;font-size:20px;letter-spacing:0.4px}
+.site-nav a{color:rgba(255,255,255,0.95);margin-left:14px;text-decoration:none;font-weight:600}
+.site-main{max-width:900px;margin:24px auto;padding:20px;background:rgba(255,255,255,0.85);border-radius:10px;box-shadow:0 6px 24px rgba(14,14,14,0.06)}
+.site-footer{text-align:center;color:var(--muted);padding:12px;margin-top:18px}
+form{border:0;padding:0}
+label{display:block;margin-top:10px}
+input[type=text],input[type=number],select{width:100%;padding:8px;border:1px solid #e6e2df;border-radius:6px}
+button{background:var(--accent1);color:white;border:none;padding:10px 14px;border-radius:6px;cursor:pointer}
+button.secondary{background:transparent;color:var(--accent1);border:1px solid rgba(255,111,60,0.2)}
+.messages{margin-bottom:12px}
+.msg-success{color:green}
+.msg-error{color:darkred}
+.result-card{display:flex;gap:18px;align-items:flex-start}
+.result-card img{max-width:360px;border-radius:8px;box-shadow:0 8px 18px rgba(0,0,0,0.06)}
+.pred-list{flex:1}
+.pred-list li{padding:8px 0;border-bottom:1px dashed rgba(0,0,0,0.04)}
+.center{text-align:center}
+.gif-train{max-width:220px;display:block;margin:18px auto}

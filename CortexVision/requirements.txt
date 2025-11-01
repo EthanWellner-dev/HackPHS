@@ -1,0 +1,11 @@
+flask
+snowflake-connector-python
+pandas
+Pillow
+selenium
+webdriver-manager
+scraper
+ChromeDriverManager
+beautifulsoup4
+requests
+python-dotenv
