@@ -8,6 +8,7 @@ class TrainingProgress {
         this.trainingCanvas = document.getElementById('training-animation');
         this.ctx = this.trainingCanvas.getContext('2d');
         this.frameInterval = null;
+        this.className = document.querySelector('.training-container').dataset.className;
     }
 
     connect() {
@@ -16,6 +17,7 @@ class TrainingProgress {
             // if a fallback timer exists, clear it
             try{ if(typeof this._clearFallback === 'function') this._clearFallback(); }catch(e){}
             try{ this.stopFallbackProgress(); }catch(e){}
+            this.startTraining();
         };
         this.socket.onmessage = (event) => {
             try{ this.stopFallbackProgress(); }catch(e){}
@@ -30,6 +32,15 @@ class TrainingProgress {
             // start fallback if not already
             try{ this.startFallbackProgress(); }catch(e){}
         };
+    }
+
+    startTraining() {
+        if (this.socket.readyState === WebSocket.OPEN) {
+            this.socket.send(JSON.stringify({
+                action: 'start_training',
+                class_name: this.className
+            }));
+        }
     }
 
     handleMessage(event) {

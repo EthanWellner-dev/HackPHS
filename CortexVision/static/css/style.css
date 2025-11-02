@@ -5,6 +5,8 @@
   --accent1: #ff6f3c;
   --accent2: #ffb03b;
   --muted: #6b5e57;
+  --bs-primary: var(--accent1);
+  --bs-body-font-family: 'Inter', sans-serif;
 }
 html,body{height:100%;margin:0;font-family:Inter, Arial, sans-serif;background:linear-gradient(180deg,var(--bg1),var(--bg2));}
 /* subtle paper texture */
@@ -54,3 +56,15 @@ button.secondary{background:transparent;color:var(--accent1);border:1px solid rg
 .center{text-align:center}
 .gif-train{max-width:220px;display:block;margin:18px auto}
 #embedWarning,.warning{visibility:none;}
+
+.card {
+    background-color: rgba(255, 255, 255, 0.85);
+}
+
+.text-primary {
+    color: var(--accent1) !important;
+}
+
+.text-success {
+    color: #198754 !important;
+}
