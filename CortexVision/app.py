@@ -1,11 +1,13 @@
 from flask import Flask, render_template, request, redirect, url_for, send_file, flash, jsonify
 import pandas as pd
+import base64
+import threading
 from snowflake.connector import connect
 import os
 from pathlib import Path
 import tempfile
 import io
-from PIL import Image, ImageDraw
+from PIL import Image
 import time
 
 from snowflake_conn import CustomSnowflake
@@ -157,9 +159,74 @@ def teach():
         flash("Please provide both model and class names.", "error")
         return redirect(url_for("index"))
 
-    ok, message = teach_workflow(model_name, class_name, num_images, image_source_dir, stage_name, embed_model)
-    flash(message, "success" if ok else "error")
-    return redirect(url_for("index"))
+    # If no explicit image_source_dir provided, scrape first and then run training in background
+    def _safe(name: str) -> str:
+        return "".join(c for c in name if c.isalnum() or c in (' ', '-', '_')).strip().replace(' ', '_')
+
+    model_safe = _safe(model_name)
+    class_safe = _safe(class_name)
+    out_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'images', model_safe, class_safe)
+    os.makedirs(out_dir, exist_ok=True)
+
+    if not image_source_dir:
+        # Scrape images first (synchronous) then show a training page while background training runs
+        scraper = WebScraper()
+        ok = scraper.download_google_images(class_name, num_images=num_images, output_dir=out_dir)
+        try:
+            scraper.close()
+        except Exception:
+            pass
+        if not ok:
+            flash(f"Scraper failed to download images for '{class_name}'", "error")
+            return redirect(url_for('index'))
+
+        # start background thread to run remaining training steps
+        def _background_train():
+            csf = CustomSnowflake.from_env()
+            try:
+                csf.connect()
+                try:
+                    csf.add_model(model_name)
+                except Exception:
+                    pass
+                class_id = csf.get_next_class_id()
+                stage_target = f"{stage_name}/{model_safe}/{class_safe}"
+                try:
+                    upload_result = csf.put_file(out_dir, stage_target)
+                    inserted = csf.insert_image_metadata_from_local_dir(out_dir, stage_target, caption=class_name)
+                    csf.add_class_embedding(class_id=class_id, class_name=class_name)
+                    try:
+                        csf.add_class_to_model(model_name, class_name)
+                    except Exception:
+                        pass
+                    try:
+                        if csf._conn:
+                            csf._conn.commit()
+                    except Exception:
+                        pass
+                except Exception:
+                    try:
+                        if csf._conn:
+                            csf._conn.rollback()
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+            finally:
+                try:
+                    csf.close()
+                except Exception:
+                    pass
+
+        t = threading.Thread(target=_background_train, daemon=True)
+        t.start()
+        # Render a training page that shows a gif while the background job runs
+        return render_template('training.html')
+
+    else:
+        ok, message = teach_workflow(model_name, class_name, num_images, image_source_dir, stage_name, embed_model)
+        flash(message, "success" if ok else "error")
+        return redirect(url_for("index"))
 
 
 @app.route("/api/models", methods=["GET", "POST"])
@@ -208,20 +275,28 @@ def api_model_classes(model: str):
             pass
 
 
-def run_classification_on_uploaded(tmp_path: str, stage_name_detect: str):
+def run_classification_on_uploaded(tmp_path: str, stage_name_detect: str, model_name: str | None = None):
     csf = CustomSnowflake.from_env()
     try:
         csf.connect()
         put_res = csf.put_file(tmp_path, stage_name_detect)
         remote_basename = os.path.basename(tmp_path)
         stage_file = f"{stage_name_detect}/{remote_basename}"
+        # If a model_name is provided, restrict to classes registered for that model
+        embed_fn = 'snowflake-arctic-embed-m'
+        model_filter_sql = ''
+        if model_name:
+            # restrict to classes mapped to given model
+            model_filter_sql = f"JOIN VISIONDB.HACKATHON_SCHEMA.MODEL_CLASSES mc ON ce.CLASS_NAME = mc.CLASS_NAME AND mc.MODEL_NAME = '{model_name}'"
+
         classify_sql = f"""
         WITH img_vec AS (
-            SELECT SNOWFLAKE.CORTEX.EMBED_IMAGE_768('snowflake-arctic-embed-m', '{stage_file}') as image_vector
+            SELECT SNOWFLAKE.CORTEX.EMBED_IMAGE_768('{embed_fn}', '{stage_file}') as image_vector
         )
         SELECT ce.CLASS_ID, ce.CLASS_NAME,
             (ARRAY_SUM(ARRAY_ZIP(img_vec.image_vector, ce.TEXT_VECTOR, (x,y) -> x * y))) AS score
         FROM img_vec, VISIONDB.HACKATHON_SCHEMA.CLASS_EMBEDDINGS ce
+        {model_filter_sql}
         ORDER BY score DESC
         LIMIT 5;
         """
@@ -234,20 +309,35 @@ def run_classification_on_uploaded(tmp_path: str, stage_name_detect: str):
             pass
 
 
+@app.route("/detect", methods=["GET"])
+def detect_form():
+    # Render detect input page
+    return render_template('detect.html')
+
+
 @app.route("/detect", methods=["POST"])
 def detect():
-    file = request.files.get("image_file")
+    # Accept either a file upload (image_file) or a base64 image in image_data (from camera)
     stage_name_detect = request.form.get("stage_name_detect", os.environ.get("IMAGE_STAGE", "@VISIONDB.HACKATHON_SCHEMA.IMAGE_STAGE"))
 
-    if not file:
+    image_data = request.form.get('image_data')
+    file = request.files.get("image_file")
+
+    if not file and not image_data:
         flash("No file uploaded.", "error")
-        return redirect(url_for("index"))
+        return redirect(url_for("detect_form"))
 
     try:
-        img = Image.open(file.stream).convert("RGB")
+        if image_data:
+            # data URL -> decode
+            header, b64 = image_data.split(',', 1) if ',' in image_data else (None, image_data)
+            img_bytes = base64.b64decode(b64)
+            img = Image.open(io.BytesIO(img_bytes)).convert('RGB')
+        else:
+            img = Image.open(file.stream).convert("RGB")
     except Exception as e:
         flash(f"Failed to open uploaded image: {e}", "error")
-        return redirect(url_for("index"))
+        return redirect(url_for("detect_form"))
 
     # Save temporarily
     tmpf = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg")
@@ -256,12 +346,11 @@ def detect():
 
     # Optionally run classification
     run_classify = request.form.get("run_classify") == "1"
-    classification = None
-    uploaded_files = None
+    classification = []
     if run_classify:
         try:
-            rows, put_res = run_classification_on_uploaded(tmpf.name, stage_name_detect)
-            uploaded_files = put_res.get("uploaded_files", []) if isinstance(put_res, dict) else None
+            detect_model = request.form.get('detect_model') or None
+            rows, put_res = run_classification_on_uploaded(tmpf.name, stage_name_detect, model_name=detect_model)
             if rows:
                 classification = pd.DataFrame(rows, columns=["CLASS_ID", "CLASS_NAME", "SCORE"]).to_dict(orient="records")
             else:
@@ -269,27 +358,12 @@ def detect():
         except Exception as e:
             flash(f"Classification failed: {e}", "error")
 
-    # If bounding box requested, draw and return the image directly
-    bx = int(request.form.get("bx", 0) or 0)
-    by = int(request.form.get("by", 0) or 0)
-    bw = int(request.form.get("bw", 0) or 0)
-    bh = int(request.form.get("bh", 0) or 0)
-    bbox_drawn = False
-    bbox_info = None
-    if bw > 0 and bh > 0:
-        draw = ImageDraw.Draw(img)
-        x0, y0, x1, y1 = bx, by, bx + bw, by + bh
-        draw.rectangle([x0, y0, x1, y1], outline="red", width=4)
-        bbox_drawn = True
-        bbox_info = (x0, y0, x1, y1)
-
-    # Prepare image bytes for inline display
+    # Prepare image bytes for inline display (base64)
     buf = io.BytesIO()
     img.save(buf, format="JPEG")
-    buf.seek(0)
+    img_b64 = base64.b64encode(buf.getvalue()).decode('ascii')
 
-    # Render index with embedded results by returning the template with context
-    return send_file(buf, mimetype="image/jpeg")
+    return render_template('detect_result.html', image_b64=img_b64, predictions=classification)
 
 
 if __name__ == "__main__":

@@ -14,8 +14,27 @@
           <a href="/">Teach</a>
           <a href="/detect">Detect</a>
         </nav>
+        <button id="helpBtn" title="Why change the image stage?" aria-label="Help" class="help-btn">?</button>
       </div>
     </header>
+
+    <div id="helpModal" class="help-modal" role="dialog" aria-hidden="true">
+      <div class="help-inner">
+        <h3>Why change the Snowflake image stage?</h3>
+        <p>The image stage controls where uploaded images are stored inside your Snowflake account (for PUT commands). You normally don't need to change this during the hackathon. Changing it is useful if you have a specific stage created in your account or are sharing a stage across projects.</p>
+        <p>Embedding model selection chooses which embedding engine produces image/text vectors for matching. The default works for demos.</p>
+        <div style="text-align:right"><button id="helpClose">Close</button></div>
+      </div>
+    </div>
+    <script>
+      document.addEventListener('DOMContentLoaded', function(){
+        const btn = document.getElementById('helpBtn');
+        const modal = document.getElementById('helpModal');
+        const close = document.getElementById('helpClose');
+        if(btn){ btn.addEventListener('click', ()=>{ modal.style.display='block'; modal.setAttribute('aria-hidden','false'); }); }
+        if(close){ close.addEventListener('click', ()=>{ modal.style.display='none'; modal.setAttribute('aria-hidden','true'); }); }
+      });
+    </script>
 
     <main class="site-main">
       {% block content %}{% endblock %}

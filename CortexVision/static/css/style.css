@@ -13,6 +13,14 @@ body::before{content:"";position:fixed;inset:0;pointer-events:none;background-im
 .header-inner{max-width:900px;margin:0 auto;display:flex;align-items:center;justify-content:space-between}
 .site-title{margin:0;font-size:20px;letter-spacing:0.4px}
 .site-nav a{color:rgba(255,255,255,0.95);margin-left:14px;text-decoration:none;font-weight:600}
+.help-btn{background:none;border:none;color:var(--muted);border-radius:50%;width:24px;height:24px;font-weight:700;cursor:pointer;vertical-align:middle;font-size:14px}
+.help-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);align-items:center;justify-content:center}
+.help-inner{max-width:520px;margin:80px auto;background:white;padding:18px;border-radius:8px;color:#333}
+/* File input styling and label-help layout */
+.file-input-wrap{border:2px dashed var(--accent2);border-radius:8px;padding:14px;text-align:center;background:rgba(255,255,255,0.6)}
+.file-input-wrap input[type="file"]{display:none}
+.file-input-wrap span{color:var(--accent1);display:block;margin:4px 0}
+.label-with-help{display:flex;align-items:center;gap:8px}
 .site-main{max-width:900px;margin:24px auto;padding:20px;background:rgba(255,255,255,0.85);border-radius:10px;box-shadow:0 6px 24px rgba(14,14,14,0.06)}
 .site-footer{text-align:center;color:var(--muted);padding:12px;margin-top:18px}
 form{border:0;padding:0}

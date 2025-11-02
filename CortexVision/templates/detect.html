@@ -3,17 +3,27 @@
   <h2>Detect Objects — upload an image or use camera</h2>
 
   <form action="/detect" method="post" enctype="multipart/form-data" id="detectForm">
-    <label>Upload image
-      <input type="file" name="image_file" id="uploadFileInput" accept="image/png,image/jpeg">
+    <label>AI Model to use for detection
+      <select name="detect_model" id="detectModelSelect">
+        <option value="">-- all models --</option>
+      </select>
     </label>
+
+    <div class="file-input-wrap">
+      <label>
+        <input type="file" name="image_file" id="uploadFileInput" accept="image/png,image/jpeg">
+        <span>Click to choose an image file</span>
+        <small>or drag and drop here</small>
+      </label>
+    </div>
 
     <input type="hidden" name="image_data" id="imageDataInput">
 
-    <div style="margin-top:8px">
-      <video id="webcamFeed" autoplay muted playsinline style="max-width:100%; border:1px solid #ccc; display:none; margin-bottom:8px"></video>
+    <div style="margin-top:16px" id="cameraArea">
+      <video id="webcamFeed" autoplay muted playsinline style="max-width:100%; border:1px solid #ccc; display:none; margin-bottom:8px; border-radius:6px"></video>
       <div>
-        <button id="useCameraBtn" type="button" class="secondary">Use Camera</button>
-        <button id="captureBtn" type="button">Capture from Camera & Upload</button>
+        <button id="useCameraBtn" type="button" class="button secondary">Use Camera</button>
+        <button id="captureBtn" type="button" class="button primary" style="display:none">Capture from Camera & Upload</button>
       </div>
     </div>
 
@@ -23,4 +33,19 @@
   <p class="center">Note: Camera will only start when you click "Use Camera". Predictions will be displayed on a separate results page.</p>
 
   <script src="/static/webcam.js"></script>
+  <script>
+    // populate detect model select on load
+    (async function(){
+      const sel = document.getElementById('detectModelSelect');
+      try{
+        const resp = await fetch('/api/models');
+        const data = await resp.json();
+        if(data && data.models){
+          for(const m of data.models){
+            const o = document.createElement('option'); o.value=m; o.text=m; sel.appendChild(o);
+          }
+        }
+      }catch(err){ console.warn(err); }
+    })();
+  </script>
 {% endblock %}
