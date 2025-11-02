@@ -1,7 +1,7 @@
 /* Mountain paper theme: warm oranges/reds/yellows and subtle paper texture */
 :root{
-  --bg1: #fff5eb;
-  --bg2: #ffe8d6;
+  --bg1: #d5e3ef;
+  --bg2: #c5d7ed;
   --accent1: #ff6f3c;
   --accent2: #ffb03b;
   --muted: #6b5e57;
@@ -13,15 +13,31 @@ body::before{content:"";position:fixed;inset:0;pointer-events:none;background-im
 .header-inner{max-width:900px;margin:0 auto;display:flex;align-items:center;justify-content:space-between}
 .site-title{margin:0;font-size:20px;letter-spacing:0.4px}
 .site-nav a{color:rgba(255,255,255,0.95);margin-left:14px;text-decoration:none;font-weight:600}
-.help-btn{background:none;border:none;color:var(--muted);border-radius:50%;width:24px;height:24px;font-weight:700;cursor:pointer;vertical-align:middle;font-size:14px}
+.help-btn{background:rgba(255,255,255,0.12);border:none;color:white;border-radius:50%;width:30px;height:30px;font-weight:700;cursor:pointer}
 .help-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);align-items:center;justify-content:center}
 .help-inner{max-width:520px;margin:80px auto;background:white;padding:18px;border-radius:8px;color:#333}
-/* File input styling and label-help layout */
-.file-input-wrap{border:2px dashed var(--accent2);border-radius:8px;padding:14px;text-align:center;background:rgba(255,255,255,0.6)}
-.file-input-wrap input[type="file"]{display:none}
-.file-input-wrap span{color:var(--accent1);display:block;margin:4px 0}
-.label-with-help{display:flex;align-items:center;gap:8px}
 .site-main{max-width:900px;margin:24px auto;padding:20px;background:rgba(255,255,255,0.85);border-radius:10px;box-shadow:0 6px 24px rgba(14,14,14,0.06)}
+.site-main{position:relative;z-index:20}
+.landscape-container{position:fixed;top:0;left:0;width:100%;height:100%;z-index:1;pointer-events:none}
+.sun{position:absolute;top:10%;left:50%;transform:translateX(-50%);width:15vw;height:15vw;max-width:180px;max-height:180px;border-radius:50%;background:radial-gradient(ellipse at center, #fef08a 0%, #facc15 50%, #eab308 100%);box-shadow:0 0 30px 10px rgba(250,204,21,0.5);z-index:2}
+.layer{position:absolute;bottom:0;left:0;width:100%}
+.layer-11{height:70%;background:linear-gradient(to top,#e2e8f0,#f8fafc);z-index:4;clip-path:polygon(0 100%,100% 100%,100% 10%,95% 2%,90% 8%,85% 3%,80% 10%,75% 2%,70% 8%,65% 3%,60% 10%,55% 2%,50% 8%,45% 3%,40% 10%,35% 2%,30% 8%,25% 3%,20% 10%,15% 2%,10% 8%,5% 3%,0 10%)}
+.layer-10{height:65%;background:linear-gradient(to top,#ea580c,#fdba74);z-index:5;clip-path:polygon(0 100%,100% 100%,100% 4%,95% 13%,90% 5%,85% 13%,80% 4%,75% 13%,70% 5%,65% 13%,60% 4%,55% 13%,50% 5%,45% 13%,40% 4%,35% 13%,30% 5%,25% 13%,20% 4%,15% 13%,10% 5%,5% 13%,0 4%)}
+.layer-9{height:60%;background:linear-gradient(to top,#dc2626,#f87171);z-index:6;clip-path:polygon(0 100%,100% 100%,100% 15%,95% 7%,90% 12%,85% 7%,80% 15%,75% 7%,70% 12%,65% 7%,60% 15%,55% 7%,50% 12%,45% 7%,40% 15%,35% 7%,30% 12%,25% 7%,20% 15%,15% 7%,10% 12%,5% 7%,0 15%)}
+.layer-8{height:55%;background:linear-gradient(to top,#ec4899,#f9a8d4);z-index:7;clip-path:polygon(0 100%,100% 100%,100% 18%,95% 10%,90% 15%,85% 11%,80% 18%,75% 10%,70% 15%,65% 11%,60% 18%,55% 10%,50% 15%,45% 11%,40% 18%,35% 10%,30% 15%,25% 11%,20% 18%,15% 10%,10% 15%,5% 11%,0 18%)}
+.layer-7{height:50%;background:linear-gradient(to top,#f97316,#fb923c);z-index:8;clip-path:polygon(0 100%,100% 100%,100% 21%,95% 13%,90% 19%,85% 14%,80% 21%,75% 13%,70% 19%,65% 14%,60% 21%,55% 13%,50% 19%,45% 14%,40% 21%,35% 13%,30% 19%,25% 14%,20% 21%,15% 13%,10% 19%,5% 14%,0 21%)}
+.layer-6{height:45%;background:linear-gradient(to top,#facc15,#fde047);z-index:9;clip-path:polygon(0 100%,100% 100%,100% 17%,95% 26%,90% 18%,85% 26%,80% 17%,75% 26%,70% 18%,65% 26%,60% 17%,55% 26%,50% 18%,45% 26%,40% 17%,35% 26%,30% 18%,25% 26%,20% 17%,15% 26%,10% 18%,5% 26%,0 17%)}
+.layer-5{height:40%;background:linear-gradient(to top,#fcd34d,#fde047);z-index:10;clip-path:polygon(0 100%,100% 100%,100% 30%,95% 21%,90% 26%,85% 21%,80% 30%,75% 21%,70% 26%,65% 21%,60% 30%,55% 21%,50% 26%,45% 21%,40% 30%,35% 21%,30% 26%,25% 21%,20% 30%,15% 21%,10% 26%,5% 21%,0 30%)}
+.layer-4{height:35%;background:linear-gradient(to top,#52a1b4,#76c893);z-index:11;clip-path:polygon(0 100%,100% 100%,100% 34%,95% 25%,90% 30%,85% 26%,80% 34%,75% 25%,70% 30%,65% 26%,60% 34%,55% 25%,50% 30%,45% 26%,40% 34%,35% 25%,30% 30%,25% 26%,20% 34%,15% 25%,10% 30%,5% 26%,0 34%)}
+.layer-3{height:30%;background:linear-gradient(to top,#71bc9d,#a2e8c2);z-index:12;clip-path:polygon(0 100%,100% 100%,100% 39%,95% 30%,90% 37%,85% 31%,80% 39%,75% 30%,70% 37%,65% 31%,60% 39%,55% 30%,50% 37%,45% 31%,40% 39%,35% 30%,30% 37%,25% 31%,20% 39%,15% 30%,10% 37%,5% 31%,0 39%)}
+.layer-2{height:25%;background:linear-gradient(to top,#0d6273,#1a759f);z-index:13;clip-path:polygon(0 100%,100% 100%,100% 35%,95% 45%,90% 37%,85% 45%,80% 35%,75% 45%,70% 37%,65% 45%,60% 35%,55% 45%,50% 37%,45% 45%,40% 35%,35% 45%,30% 37%,25% 45%,20% 35%,15% 45%,10% 37%,5% 45%,0 35%)}
+.layer-1{height:20%;background:linear-gradient(to top,#0a4c5a,#1b4965);z-index:14;clip-path:polygon(0 100%,100% 100%,100% 52%,95% 40%,90% 48%,85% 40%,80% 52%,75% 40%,70% 48%,65% 40%,60% 52%,55% 40%,50% 48%,45% 40%,40% 52%,35% 40%,30% 48%,25% 40%,20% 52%,15% 40%,10% 48%,5% 40%,0 52%)}
+
+/* Style file input nicely */
+input[type="file"]{display:block}
+input[type="file"]::-webkit-file-upload-button{background:var(--accent1);color:white;border:none;padding:8px 12px;border-radius:6px;cursor:pointer}
+input[type="file"]::file-selector-button{background:var(--accent1);color:white;border:none;padding:8px 12px;border-radius:6px;cursor:pointer}
+
 .site-footer{text-align:center;color:var(--muted);padding:12px;margin-top:18px}
 form{border:0;padding:0}
 label{display:block;margin-top:10px}

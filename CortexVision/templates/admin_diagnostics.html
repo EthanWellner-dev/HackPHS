@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+
+{% block content %}
+  <h2>Admin Diagnostics</h2>
+
+  <section>
+    <h3>Table counts</h3>
+    <ul>
+      {% for tbl, cnt in diagnostics.counts.items() %}
+        <li>{{ tbl }}: {{ cnt if cnt is not none else 'error' }}</li>
+      {% endfor %}
+    </ul>
+  </section>
+
+  <section>
+    <h3>Available Functions (SNOWFLAKE.CORTEX)</h3>
+    {% if diagnostics.functions %}
+      <ul>
+        {% for f in diagnostics.functions %}
+          <li>{{ f }}</li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p>No functions discovered or permission denied.</p>
+    {% endif %}
+  </section>
+
+  {% if diagnostics.errors %}
+  <section>
+    <h3>Errors</h3>
+    <ul>
+      {% for e in diagnostics.errors %}
+        <li>{{ e }}</li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  <div style="margin-top:16px">
+    <a href="/admin">&larr; Back to Admin</a>
+  </div>
+
+{% endblock %}

@@ -1,0 +1,81 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="admin-panel">
+    <h2>Admin Panel</h2>
+    <div style="margin-bottom:8px">
+        <a href="{{ url_for('admin.admin_diagnostics') }}">Run diagnostics</a>
+    </div>
+    
+    <section class="admin-section">
+        <h3>AI Models</h3>
+        <div class="model-list">
+            {% for model in models %}
+            <div class="model-item">
+                <span class="model-name">{{ model.name }}</span>
+                <div class="model-stats">
+                    <small>Classes: {{ model.class_count }}</small>
+                </div>
+                <div class="model-actions">
+                    <form action="{{ url_for('admin.admin_delete_model') }}" method="POST" class="inline-form">
+                        <input type="hidden" name="model_name" value="{{ model.name }}">
+                        <button type="submit" class="danger-btn" onclick="return confirm('Are you sure you want to delete this model and all its classes?')">Delete Model</button>
+                    </form>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+
+    <section class="admin-section">
+        <h3>Classes</h3>
+        <div class="class-list">
+            {% for class_info in classes %}
+            <div class="class-item">
+                <div class="class-header">
+                    <span class="class-name">{{ class_info.name }}</span>
+                    <span class="class-model">Model: {{ class_info.model_name }}</span>
+                </div>
+                <div class="class-stats">
+                    <small>Images: {{ class_info.image_count }}</small>
+                </div>
+                <div class="class-actions">
+                    <form action="{{ url_for('admin.admin_delete_class') }}" method="POST" class="inline-form">
+                        <input type="hidden" name="class_name" value="{{ class_info.name }}">
+                        <input type="hidden" name="model_name" value="{{ class_info.model_name }}">
+                        <button type="submit" class="danger-btn" onclick="return confirm('Are you sure you want to delete this class?')">Delete Class</button>
+                    </form>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+
+    <section class="admin-section">
+        <h3>System Status</h3>
+        <div class="system-stats">
+            <div class="stat-item">
+                <label>Total Storage Used:</label>
+                <span>{{ system_stats.storage_used }}</span>
+            </div>
+            <div class="stat-item">
+                <label>Total Models:</label>
+                <span>{{ system_stats.total_models }}</span>
+            </div>
+            <div class="stat-item">
+                <label>Total Classes:</label>
+                <span>{{ system_stats.total_classes }}</span>
+            </div>
+        </div>
+    </section>
+
+    <section class="admin-section danger-zone">
+        <h3>Danger Zone</h3>
+        <div class="danger-actions">
+            <form action="{{ url_for('admin.admin_cleanup_images') }}" method="POST" class="inline-form">
+                <button type="submit" class="danger-btn" onclick="return confirm('Are you sure you want to clean up unused image files? This cannot be undone.')">Clean Up Unused Images</button>
+            </form>
+        </div>
+    </section>
+</div>
+{% endblock %}

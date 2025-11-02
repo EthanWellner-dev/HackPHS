@@ -126,7 +126,7 @@ class WebScraper:
         try:
             print(f"Navigating to Google Images...")
             self.driver.get(url)
-            time.sleep(2)  # Wait a bit longer
+            time.sleep(0.7)  # Wait a bit longer
 
             print(f"Page title: {self.driver.title}")
             print(f"Current URL: {self.driver.current_url}")

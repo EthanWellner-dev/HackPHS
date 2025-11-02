@@ -1,4 +1,5 @@
 flask
+flask-sock
 snowflake-connector-python
 pandas
 Pillow

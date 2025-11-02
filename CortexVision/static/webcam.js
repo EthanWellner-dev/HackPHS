@@ -1,4 +1,4 @@
-// Camera control and capture, with enable/disable toggle
+// Camera only starts when the user clicks "Use Camera".
 (() => {
   const useBtn = document.getElementById('useCameraBtn');
   const captureBtn = document.getElementById('captureBtn');
@@ -7,43 +7,46 @@
   const form = document.getElementById('detectForm');
   let stream = null;
 
-  function stopCamera() {
-    if (stream) {
-      stream.getTracks().forEach(track => track.stop());
-      stream = null;
-    }
-    video.style.display = 'none';
-    captureBtn.style.display = 'none';
-    useBtn.textContent = 'Use Camera';
-    useBtn.classList.add('secondary');
-  }
-
-  async function startCamera() {
-    if (stream) return;
-    try {
+  async function startCamera(){
+    if(stream) return;
+    try{
       stream = await navigator.mediaDevices.getUserMedia({ video: true });
       video.srcObject = stream;
       video.style.display = 'block';
-      captureBtn.style.display = 'inline-block';
-      useBtn.textContent = 'Disable Camera';
-      useBtn.classList.remove('secondary');
-    } catch(err) {
+      // show capture once camera starts
+      if(captureBtn) captureBtn.style.display = 'inline-block';
+      // change use button to disable
+      const useBtn = document.getElementById('useCameraBtn');
+      if(useBtn){ useBtn.textContent = 'Disable Camera'; useBtn.dataset.active = '1'; }
+    }catch(err){
       alert('Unable to access camera: ' + err.message);
     }
   }
 
-  useBtn && useBtn.addEventListener('click', (e) => {
+  useBtn && useBtn.addEventListener('click', (e)=>{
     e.preventDefault();
-    if (stream) {
-      stopCamera();
-    } else {
+    // toggle
+    if(useBtn.dataset && useBtn.dataset.active === '1'){
+      // disable camera
+      if(stream){
+        const tracks = stream.getTracks();
+        for(const t of tracks) t.stop();
+        stream = null;
+      }
+      video.style.display = 'none';
+      if(captureBtn) captureBtn.style.display = 'none';
+      useBtn.textContent = 'Use Camera';
+      useBtn.dataset.active = '0';
+    }else{
       startCamera();
     }
   });
 
-  captureBtn && captureBtn.addEventListener('click', (e) => {
+  // capture button is hidden until camera is active
+  if(captureBtn) captureBtn.style.display = 'none';
+  captureBtn && captureBtn.addEventListener('click', (e)=>{
     e.preventDefault();
-    if (!stream) {
+    if(!stream){
       alert('Please click "Use Camera" first to start the camera.');
       return;
     }
@@ -53,11 +56,9 @@
     const ctx = canvas.getContext('2d');
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
-    if (imageDataInput) imageDataInput.value = dataUrl;
+    if(imageDataInput) imageDataInput.value = dataUrl;
     // Submit the form with the base64 image in hidden input
-    if (form) form.submit();
-    // Clean up camera after capture
-    stopCamera();
+    if(form) form.submit();
   });
 })();
 // Webcam capture helper. Expects elements with ids: webcamFeed, captureBtn, uploadInput

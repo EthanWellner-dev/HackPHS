@@ -1,7 +1,26 @@
 {% extends 'base.html' %}
 {% block content %}
-  <h2>Training in progress</h2>
-  <p class="center">All images have been collected. The model is now being trained. This may take a moment.</p>
-  <img class="gif-train" src="/static/training.gif" alt="training...">
-  <p class="center">You can return to <a href="/">Teach</a> or go to <a href="/detect">Detect</a> to try later.</p>
+<div class="training-container">
+    <h2>Training in Progress</h2>
+    
+    <div class="progress-container">
+        <div class="progress-bar">
+            <div id="training-progress" class="progress-fill"></div>
+        </div>
+        <p id="status-text" class="status">Initializing training...</p>
+    </div>
+
+    <div class="animation-container">
+        <canvas id="training-animation" width="400" height="400"></canvas>
+    </div>
+
+    <div class="training-info">
+        <p>Training your model for class: <strong>{{ class_name }}</strong></p>
+        <p>This process may take a few minutes. You'll be redirected when complete.</p>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='training.js') }}"></script>
 {% endblock %}
