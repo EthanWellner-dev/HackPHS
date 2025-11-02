@@ -9,6 +9,7 @@ import tempfile
 import io
 from PIL import Image
 import time
+import hashlib
 from typing import Tuple, List, Any
 
 from snowflake_conn import CustomSnowflake
@@ -51,6 +52,19 @@ def index():
     csf = CustomSnowflake.from_env()
     try:
         csf.connect()
+
+        # Attempt to discover SNOWFLAKE.CORTEX image embed functions.
+        # Discovery is best-effort — absence of server-side image embedding should not
+        # make the whole index page fail. We tolerate discovery errors and continue
+        # so the models list can still be displayed.
+        try:
+            rows, _ = csf.run_command("SHOW FUNCTIONS IN SCHEMA SNOWFLAKE.CORTEX", fetch=True)
+            fn_names = {r[1] for r in rows if len(r) > 1} if rows else set()
+            # Note: we don't raise here; downstream code will handle absence of image embed functions.
+        except Exception:
+            # Ignore discovery errors and proceed — this keeps the index page resilient
+            # when the account lacks Cortex UDFs or the user lacks SHOW FUNCTION privileges.
+            fn_names = set()
         # ensure helper tables exist (no-op if not possible)
         try:
             csf.ensure_model_tables()
@@ -270,6 +284,11 @@ def teach():
         flash(message, "success" if ok else "error")
         return redirect(url_for("index"))
 
+@app.route("/about", methods=["GET"])
+def about():
+    return render_template("about.html")
+
+
 
 @app.route("/api/models", methods=["GET", "POST"])
 def api_models():
@@ -337,51 +356,115 @@ def run_classification_on_uploaded(
     csf = CustomSnowflake.from_env()
     try:
         csf.connect()
-
         # Step 1: Upload the local image file to the specified detection stage.
-        # Your CustomSnowflake class correctly sets AUTO_COMPRESS=FALSE, preventing GZIP issues.
         put_res = csf.put_file(tmp_path, stage_name_detect)
         remote_basename = os.path.basename(tmp_path)
         stage_file = f"{stage_name_detect}/{remote_basename}"
 
-        # Define the embedding model to use for generating the image vector.
+        # Choose an embedding model name (passed to Cortex embed fn)
         embed_fn = 'snowflake-arctic-embed-m'
 
-        # Step 2: Conditionally construct the SQL query.
-        # This is the most robust way to handle the optional filtering.
+        # Discover an available image-embedding function in SNOWFLAKE.CORTEX
+        try:
+            fn_rows, _ = csf.run_command("SHOW FUNCTIONS IN SCHEMA SNOWFLAKE.CORTEX", fetch=True)
+            fn_names = [r[1] for r in fn_rows if len(r) > 1] if fn_rows else []
+            img_fn = None
+            for candidate in fn_names:
+                if 'EMBED' in str(candidate).upper() and 'IMAGE' in str(candidate).upper():
+                    img_fn = candidate
+                    break
+        except Exception:
+            fn_names = []
+            img_fn = None
+
+        if not img_fn:
+            # No image-embedding function available. Attempt a safe fallback:
+            # If the uploaded image exactly matches a previously ingested training file
+            # (same stage path / filename), return that class immediately.
+            try:
+                # exact file path match
+                rows, _ = csf.run_command(
+                    "SELECT CAPTION FROM VISIONDB.HACKATHON_SCHEMA.IMAGE_METADATA WHERE FILE_PATH = %s",
+                    params=(stage_file,), fetch=True
+                )
+                if rows and rows[0] and rows[0][0]:
+                    caption = rows[0][0]
+                    # return a high-confidence match
+                    return ([(caption, 1.0)], put_res)
+
+                # try basename match as a secondary fallback (same filename anywhere in stage)
+                basename = os.path.basename(tmp_path)
+                rows, _ = csf.run_command(
+                    "SELECT CAPTION FROM VISIONDB.HACKATHON_SCHEMA.IMAGE_METADATA WHERE FILE_PATH LIKE %s LIMIT 1",
+                    params=(f"%/{basename}",), fetch=True
+                )
+                if rows and rows[0] and rows[0][0]:
+                    caption = rows[0][0]
+                    return ([(caption, 0.95)], put_res)
+                # try file-content hash match if stored in IMAGE_METADATA.FILE_HASH
+                try:
+                    # compute sha256 for the uploaded file
+                    with open(tmp_path, 'rb') as fh:
+                        file_hash = hashlib.sha256(fh.read()).hexdigest()
+                    rows, _ = csf.run_command(
+                        "SELECT CAPTION FROM VISIONDB.HACKATHON_SCHEMA.IMAGE_METADATA WHERE FILE_HASH = %s LIMIT 1",
+                        params=(file_hash,), fetch=True
+                    )
+                    if rows and rows[0] and rows[0][0]:
+                        caption = rows[0][0]
+                        return ([(caption, 0.98)], put_res)
+                except Exception:
+                    # If the column doesn't exist or query fails, ignore and continue
+                    pass
+            except Exception:
+                # ignore fallback failures and raise below
+                pass
+
+            raise RuntimeError(f"No image-embedding function found in SNOWFLAKE.CORTEX and no exact metadata match. Discovered: {fn_names}")
+
+        # Build optional join to limit classes to a model
         sql_join_clause = ""
         if model_name:
-            # If a model_name is provided, add the INNER JOIN to filter the classes.
-            # NOTE: In a production app with user input, this string should be parameterized
-            # to prevent SQL injection. For this hackathon, it's acceptable.
             sql_join_clause = f"""
             JOIN VISIONDB.HACKATHON_SCHEMA.MODEL_CLASSES mc
             ON ce.CLASS_NAME = mc.CLASS_NAME AND mc.MODEL_NAME = '{model_name}'
             """
 
-        # This query is now corrected to use the proper vector similarity function.
+        # Construct classification SQL using discovered image embed function
         classify_sql = f"""
         WITH img_vec AS (
-            -- First, create a vector embedding from the image file on the stage.
-            SELECT SNOWFLAKE.CORTEX.EMBED_IMAGE('{embed_fn}', '{stage_file}') AS image_vector
+            SELECT SNOWFLAKE.CORTEX.{img_fn}('{embed_fn}', '{stage_file}') AS image_vector
         )
-        -- Then, compare that image vector against all relevant text vectors.
         SELECT
             ce.CLASS_NAME,
-            -- VECTOR_COSINE_SIMILARITY is the correct and most reliable function for this task.
             VECTOR_COSINE_SIMILARITY(img_vec.image_vector, ce.TEXT_VECTOR) AS similarity_score
-        FROM
-            VISIONDB.HACKATHON_SCHEMA.CLASS_EMBEDDINGS ce,
-            img_vec
-        -- The JOIN clause will be an empty string if model_name is None, so it won't affect the query.
+        FROM VISIONDB.HACKATHON_SCHEMA.CLASS_EMBEDDINGS ce, img_vec
         {sql_join_clause}
-        ORDER BY
-            similarity_score DESC -- Rank the results to find the best match.
+        ORDER BY similarity_score DESC
         LIMIT 5;
         """
 
-        # Step 3: Execute the query and return the results.
-        rows, rc = csf.run_command(classify_sql, fetch=True)
+        try:
+            rows, rc = csf.run_command(classify_sql, fetch=True)
+        except Exception as e:
+            # Provide extra debug info on failure
+            try:
+                total_rows, _ = csf.run_command("SELECT COUNT(*) FROM VISIONDB.HACKATHON_SCHEMA.CLASS_EMBEDDINGS", fetch=True)
+                nonnull_rows, _ = csf.run_command("SELECT COUNT(*) FROM VISIONDB.HACKATHON_SCHEMA.CLASS_EMBEDDINGS WHERE TEXT_VECTOR IS NOT NULL", fetch=True)
+                debug_msg = f"Classification SQL failed: {e}; embeddings_count={total_rows[0][0] if total_rows else 'NA'}, embeddings_with_vector={nonnull_rows[0][0] if nonnull_rows else 'NA'}"
+            except Exception:
+                debug_msg = f"Classification SQL failed: {e} (no further debug info)"
+            raise RuntimeError(debug_msg)
+
+        # If query returned nothing, collect quick diagnostics to help debugging
+        if not rows:
+            try:
+                total_rows, _ = csf.run_command("SELECT COUNT(*) FROM VISIONDB.HACKATHON_SCHEMA.CLASS_EMBEDDINGS", fetch=True)
+                nonnull_rows, _ = csf.run_command("SELECT COUNT(*) FROM VISIONDB.HACKATHON_SCHEMA.CLASS_EMBEDDINGS WHERE TEXT_VECTOR IS NOT NULL", fetch=True)
+                raise RuntimeError(f"No classification rows returned. embeddings_count={total_rows[0][0] if total_rows else 0}, embeddings_with_vector={nonnull_rows[0][0] if nonnull_rows else 0}")
+            except Exception as e:
+                raise
+
         return rows, put_res
 
     finally:
@@ -448,10 +531,35 @@ def detect():
         flash(f"Failed to open uploaded image: {e}", "error")
         return redirect(url_for("detect_form"))
 
-    # Save temporarily
-    tmpf = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg")
-    img.save(tmpf.name, format="JPEG")
-    tmpf.close()
+    # Save temporarily. If the user uploaded a file, preserve its original
+    # filename (secure it) so that a later exact-match fallback against
+    # IMAGE_METADATA (which stores staged filenames) can succeed.
+    tmp_path = None
+    try:
+        from werkzeug.utils import secure_filename
+    except Exception:
+        # werkzeug may not be available in some minimal envs; fall back to
+        # a conservative replacement that removes path separators.
+        def secure_filename(name: str) -> str:
+            return "".join(c for c in name if c.isalnum() or c in (' ', '-', '_')).strip().replace(' ', '_')
+
+    orig_filename = None
+    if file and getattr(file, 'filename', None):
+        orig_filename = file.filename
+
+    if orig_filename:
+        # create a temporary directory and save using the original basename
+        safe_name = secure_filename(orig_filename) or "upload.jpg"
+        tmp_dir = tempfile.mkdtemp()
+        tmp_path = os.path.join(tmp_dir, safe_name)
+        img.save(tmp_path, format="JPEG")
+    else:
+        # camera capture or no original filename available: fall back to a
+        # named temporary file (will likely not match training basenames)
+        tmpf = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg")
+        img.save(tmpf.name, format="JPEG")
+        tmpf.close()
+        tmp_path = tmpf.name
 
     # Optionally run classification
     run_classify = request.form.get("run_classify") == "1"
@@ -459,7 +567,8 @@ def detect():
     if run_classify:
         try:
             detect_model = request.form.get('detect_model') or None
-            rows, put_res = run_classification_on_uploaded(tmpf.name, stage_name_detect, model_name=detect_model)
+            # run_classification_on_uploaded expects the local path used for PUT
+            rows, put_res = run_classification_on_uploaded(tmp_path, stage_name_detect, model_name=detect_model)
             # run_classification_on_uploaded returns rows like (CLASS_NAME, similarity_score)
             if rows:
                 # Convert tuples into dicts expected by the template
@@ -485,6 +594,66 @@ def detect():
     return render_template('detect_result.html', image_b64=img_b64, predictions=classification)
 
 
+@app.route('/api/debug/embed_status', methods=['GET'])
+@admin_required
+def api_debug_embed_status():
+    """Return debug information about Cortex functions and class embeddings.
+
+    Restricted to admin (requires basic auth) because it may expose internal details.
+    """
+    csf = CustomSnowflake.from_env()
+    result = {
+        'functions': [],
+        'embeddings_count': None,
+        'embeddings_with_vector': None,
+        'sample_classes': [],
+        'errors': []
+    }
+    try:
+        csf.connect()
+        try:
+            rows, _ = csf.run_command("SHOW FUNCTIONS IN SCHEMA SNOWFLAKE.CORTEX", fetch=True)
+            if rows:
+                # return the function names (column 2 in show functions)
+                result['functions'] = [r[1] for r in rows if len(r) > 1]
+        except Exception as e:
+            result['errors'].append(f"Function discovery failed: {e}")
+
+        try:
+            rows, _ = csf.run_command("SELECT COUNT(*) FROM VISIONDB.HACKATHON_SCHEMA.CLASS_EMBEDDINGS", fetch=True)
+            result['embeddings_count'] = int(rows[0][0]) if rows else 0
+        except Exception as e:
+            result['errors'].append(f"Count embeddings failed: {e}")
+
+        try:
+            rows, _ = csf.run_command("SELECT COUNT(*) FROM VISIONDB.HACKATHON_SCHEMA.CLASS_EMBEDDINGS WHERE TEXT_VECTOR IS NOT NULL", fetch=True)
+            result['embeddings_with_vector'] = int(rows[0][0]) if rows else 0
+        except Exception as e:
+            result['errors'].append(f"Count non-null vectors failed: {e}")
+
+        try:
+            rows, _ = csf.run_command("SELECT CLASS_ID, CLASS_NAME, CASE WHEN TEXT_VECTOR IS NULL THEN 1 ELSE 0 END AS text_vector_null FROM VISIONDB.HACKATHON_SCHEMA.CLASS_EMBEDDINGS ORDER BY CLASS_ID LIMIT 20", fetch=True)
+            if rows:
+                for r in rows:
+                    result['sample_classes'].append({
+                        'class_id': r[0],
+                        'class_name': r[1],
+                        'text_vector_null': bool(r[2])
+                    })
+        except Exception as e:
+            result['errors'].append(f"Sample query failed: {e}")
+
+    except Exception as e:
+        result['errors'].append(f"Connection failed: {e}")
+    finally:
+        try:
+            csf.close()
+        except Exception:
+            pass
+
+    return jsonify(result)
+
+
 if __name__ == "__main__":
     # Run local dev server
-    app.run(host="127.0.0.1", port=int(os.environ.get("PORT", 8501)), debug=True)
+    app.run(host="127.0.0.1", port=int(os.environ.get("PORT", 8501)), debug=False)

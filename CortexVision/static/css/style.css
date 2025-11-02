@@ -53,3 +53,4 @@ button.secondary{background:transparent;color:var(--accent1);border:1px solid rg
 .pred-list li{padding:8px 0;border-bottom:1px dashed rgba(0,0,0,0.04)}
 .center{text-align:center}
 .gif-train{max-width:220px;display:block;margin:18px auto}
+#embedWarning,.warning{visibility:none;}

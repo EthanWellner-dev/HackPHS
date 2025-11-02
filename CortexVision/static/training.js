@@ -11,11 +11,24 @@ class TrainingProgress {
     }
 
     connect() {
-        this.socket = new WebSocket(`ws://${window.location.host}/ws/training`);
-        this.socket.onmessage = (event) => this.handleMessage(event);
+        this.socket = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + window.location.host + '/ws/training');
+        this.socket.onopen = () => {
+            // if a fallback timer exists, clear it
+            try{ if(typeof this._clearFallback === 'function') this._clearFallback(); }catch(e){}
+            try{ this.stopFallbackProgress(); }catch(e){}
+        };
+        this.socket.onmessage = (event) => {
+            try{ this.stopFallbackProgress(); }catch(e){}
+            this.handleMessage(event);
+        };
         this.socket.onclose = () => {
             console.log('WebSocket connection closed');
             this.stopAnimation();
+        };
+        this.socket.onerror = (ev) => {
+            console.warn('WebSocket error', ev);
+            // start fallback if not already
+            try{ this.startFallbackProgress(); }catch(e){}
         };
     }
 
@@ -110,5 +123,51 @@ class TrainingProgress {
 
 document.addEventListener('DOMContentLoaded', () => {
     const training = new TrainingProgress();
-    training.connect();
+    // try to connect to a websocket for live progress; if unavailable, fallback
+    // to a local animated progress so the user sees a loader.
+    try{
+        training.connect();
+        // if socket fails to open within a short time, start fallback
+        const fallbackTimer = setTimeout(()=>{
+            if(!training.socket || training.socket.readyState !== WebSocket.OPEN){
+                training.startFallbackProgress();
+            }
+        }, 800);
+        // clear fallback timer on successful connection
+        training._clearFallback = () => clearTimeout(fallbackTimer);
+    }catch(e){
+        console.warn('WebSocket connect failed, using fallback progress', e);
+        training.startFallbackProgress();
+    }
 });
+
+// extend small fallback behavior onto prototype
+TrainingProgress.prototype.startFallbackProgress = function(){
+    // animate progress up to 85% slowly and show a status message
+    if(this._fallbackInterval) return;
+    let percent = 5;
+    this.progressBar.style.width = `${percent}%`;
+    this.statusText.textContent = 'Preparing images...';
+    this._fallbackInterval = setInterval(()=>{
+        percent = Math.min(85, percent + (Math.random()*4));
+        this.progressBar.style.width = `${percent}%`;
+        // small canvas animation to make it feel alive
+        try{
+            if(this.trainingCanvas && this.ctx){
+                this.ctx.fillStyle = '#f6f6f6';
+                this.ctx.fillRect(0,0,this.trainingCanvas.width,this.trainingCanvas.height);
+                this.ctx.fillStyle = '#ddd';
+                const x = Math.floor(Math.random()*(this.trainingCanvas.width-40));
+                const y = Math.floor(Math.random()*(this.trainingCanvas.height-40));
+                this.ctx.fillRect(x,y,40,30);
+            }
+        }catch(e){}
+    }, 400);
+};
+
+TrainingProgress.prototype.stopFallbackProgress = function(){
+    if(this._fallbackInterval){
+        clearInterval(this._fallbackInterval);
+        this._fallbackInterval = null;
+    }
+};

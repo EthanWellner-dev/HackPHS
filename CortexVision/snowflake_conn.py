@@ -4,6 +4,7 @@ from typing import Any, Iterable, Optional, Tuple
 
 from dotenv import load_dotenv
 import snowflake.connector
+import hashlib
 
 # Load environment variables from a local .env file (if present) and system env
 load_dotenv()
@@ -192,24 +193,48 @@ class CustomSnowflake:
             basename = os.path.basename(path)
             image_id = os.path.splitext(basename)[0]
             stage_file = f"{stage_target}/{basename}"
-            rows.append((image_id, stage_file, caption if caption is not None else image_id))
+            # compute sha256 hash of file content to enable exact-match by content
+            try:
+                with open(path, 'rb') as fh:
+                    file_hash = hashlib.sha256(fh.read()).hexdigest()
+            except Exception:
+                file_hash = None
+            rows.append((image_id, stage_file, caption if caption is not None else image_id, file_hash))
 
         cur = conn.cursor()
-        insert_sql = (
-            "INSERT INTO VISIONDB.HACKATHON_SCHEMA.IMAGE_METADATA "
-            "(IMAGE_ID, FILE_PATH, CAPTION) VALUES (%s, %s, %s)"
-        )
+        # Try to ensure a FILE_HASH column exists; if this fails (permissions or already exists), ignore
         try:
-            # Some Snowflake connector versions have issues with executemany and
-            # placeholder expansion; execute rows one-by-one with parameter
-            # binding which is more robust and gives clearer errors per-row.
+            try:
+                self.run_command("ALTER TABLE VISIONDB.HACKATHON_SCHEMA.IMAGE_METADATA ADD COLUMN FILE_HASH VARCHAR", fetch=False)
+            except Exception:
+                # ignore errors from alter (e.g., column exists or insufficient privileges)
+                pass
+
+            insert_sql_with_hash = (
+                "INSERT INTO VISIONDB.HACKATHON_SCHEMA.IMAGE_METADATA "
+                "(IMAGE_ID, FILE_PATH, CAPTION, FILE_HASH) VALUES (%s, %s, %s, %s)"
+            )
+            # Try to insert with file_hash column; if that fails, fall back to older schema
             for params in rows:
-                cur.execute(insert_sql, params)
+                try:
+                    cur.execute(insert_sql_with_hash, params)
+                except Exception:
+                    # attempt fallback to 3-column insert for this row
+                    basename = params[1]
+                    image_id = params[0]
+                    caption_val = params[2]
+                    try:
+                        cur.execute(
+                            "INSERT INTO VISIONDB.HACKATHON_SCHEMA.IMAGE_METADATA (IMAGE_ID, FILE_PATH, CAPTION) VALUES (%s, %s, %s)",
+                            (image_id, basename, caption_val),
+                        )
+                    except Exception:
+                        # if even the fallback fails for a row, re-raise to be visible
+                        raise
 
             try:
                 conn.commit()
             except Exception:
-                # commit may be unnecessary depending on connector settings; ignore commit errors but log
                 logger.debug("Commit failed or unnecessary after metadata insert")
 
             return len(rows)

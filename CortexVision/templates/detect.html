@@ -13,6 +13,16 @@
       <input type="file" name="image_file" id="uploadFileInput" accept="image/png,image/jpeg">
     </label>
 
+    <!-- Option to run image-based classification. If the Snowflake EMBED_IMAGE function
+         is not available this checkbox will be disabled so uploads still work but no
+         image-based classification will be attempted. -->
+    <label style="display:block;margin-top:8px">
+      <!-- Enabled by default. If server-side image embedding is not available,
+           the server will attempt an exact-match fallback against training metadata. -->
+      <input type="checkbox" name="run_classify" id="runClassifyCheckbox" value="1" checked>
+      Run image-based classification (or fallback exact-match when embed fn missing)
+    </label>
+
     <input type="hidden" name="image_data" id="imageDataInput">
 
     <div style="margin-top:8px">
@@ -27,10 +37,42 @@
   </form>
 
   {% if embed_image_available is defined and not embed_image_available %}
-  <div class="warning" style="margin-top:12px;padding:8px;border:1px solid #f5c6cb;background:#fff5f6;color:#721c24;">
-    Warning: server-side image embedding (SNOWFLAKE.CORTEX.EMBED_IMAGE) is not available in the connected Snowflake account.
-    Image-based classification will fail. Use training/diagnostics to enable/embed functions.
+  <div id="embedWarning" class="warning" style="margin-top:12px;padding:8px;border:1px solid #f5c6cb;background:#fff5f6;color:#721c24;">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <strong>Warning:</strong> server-side image embedding (SNOWFLAKE.CORTEX.EMBED_IMAGE) is not available in the connected Snowflake account.
+        Image-based classification will fail if attempted.
+      </div>
+      <div style="margin-left:12px">
+        <button id="dismissEmbedWarning" type="button" style="background:transparent;border:1px solid #ccc;padding:4px 8px;cursor:pointer">Dismiss</button>
+      </div>
+    </div>
+    <div style="margin-top:6px">What you can do:
+      <ul>
+        <li>Run <a href="/admin/diagnostics">Admin → Diagnostics</a> to see which Cortex functions are available and any errors.</li>
+        <li>Use the training & diagnostics pages on the admin panel to enable or install Cortex UDFs in your Snowflake account.</li>
+        <li>If you only need text-based classification, avoid submitting images or disable <em>image-based</em> classification in the Detect form.</li>
+      </ul>
+    </div>
   </div>
+  <script>
+    // persist dismissal in localStorage so the warning doesn't keep showing
+    (function(){
+      try{
+        const key = 'cortexEmbedWarningDismissed_v1';
+        const banner = document.getElementById('embedWarning');
+        const btn = document.getElementById('dismissEmbedWarning');
+        if(!banner) return;
+        if(localStorage.getItem(key) === '1'){
+          banner.style.display = 'none';
+        }
+        btn && btn.addEventListener('click', function(){
+          try{ localStorage.setItem(key, '1'); }catch(e){}
+          banner.style.display = 'none';
+        });
+      }catch(e){ /* ignore */ }
+    })();
+  </script>
   {% endif %}
 
   <p class="center">Note: Camera will only start when you click "Use Camera". Predictions will be displayed on a separate results page.</p>
